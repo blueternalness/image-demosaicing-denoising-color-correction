@@ -3,8 +3,8 @@
 #include <fstream>
 #include <string>
 
-const int WIDTH = 768;
-const int HEIGHT = 512;
+const int WIDTH = 512;
+const int HEIGHT = 768;
 
 unsigned char getVal(const std::vector<unsigned char>& img, int r, int c, int w, int h) {
     if (r < 0) r = 0;
