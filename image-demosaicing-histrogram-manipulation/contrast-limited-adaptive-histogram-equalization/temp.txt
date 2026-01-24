@@ -1,0 +1,3 @@
+g++ -std=c++17 contrast-limited-adaptive-histogram-equalization.cpp \
+    -o contrast-limited-adaptive-histogram-equalization \
+    `pkg-config --cflags --libs opencv4`
