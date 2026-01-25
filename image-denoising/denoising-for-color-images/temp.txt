@@ -1,0 +1,3 @@
+g++ -std=c++17 denoising-for-color-images.cpp \
+    -o denoising-for-color-images \
+    `pkg-config --cflags --libs opencv4`
