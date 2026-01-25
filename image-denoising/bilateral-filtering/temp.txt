@@ -1,0 +1,3 @@
+g++ -std=c++17 bilateral-filtering.cpp \
+    -o bilateral-filtering \
+    `pkg-config --cflags --libs opencv4`
