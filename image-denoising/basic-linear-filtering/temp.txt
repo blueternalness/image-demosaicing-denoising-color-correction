@@ -1,0 +1,3 @@
+g++ -std=c++17 basic-linear-filtering.cpp \
+    -o basic-linear-filtering \
+    `pkg-config --cflags --libs opencv4`
