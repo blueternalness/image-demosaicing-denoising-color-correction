@@ -1,92 +1,155 @@
-#include <opencv2/opencv.hpp>
 #include <iostream>
-#include <fstream> // Required for file I/O
-#include <cmath>
+#include <fstream>
 #include <vector>
+#include <cmath>
+#include <algorithm>
+#include <iomanip> // For std::setprecision
 
-using namespace cv;
 using namespace std;
 
 const int WIDTH = 768;
 const int HEIGHT = 512;
+const int MAX_VAL = 255;
 
-Mat readRawImage(const string& filename, int width, int height) {
-    Mat img(height, width, CV_8UC1);
 
-    ifstream file(filename, ios::binary);
+// Mirroring for boundary condition
+/*
+unsigned char getPixel(const vector<unsigned char>& data, int x, int y) {
+    // If x is -1, it becomes 1. If x is WIDTH, it becomes WIDTH - 2.
+    if (x < 0) x = -x;
+    if (x >= WIDTH) x = 2 * WIDTH - x - 2;
     
-    if (!file) {
-        cerr << "Error: Could not open file " << filename << endl;
-        return Mat(); // Return empty Mat on error
+    if (y < 0) y = -y;
+    if (y >= HEIGHT) y = 2 * HEIGHT - y - 2;
+
+    return data[y * WIDTH + x];
+}
+*/
+
+
+// Zero Padding for boundary condition
+/*
+unsigned char getPixel(const vector<unsigned char>& data, int x, int y) {
+    if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return 0;
+    return data[y * WIDTH + x];
+}
+*/
+
+double calculatePSNR(const vector<unsigned char>& original, const vector<unsigned char>& filtered) {
+    double mse = 0;
+    for (int i = 0; i < WIDTH * HEIGHT; ++i) {
+        double diff = (double)original[i] - (double)filtered[i];
+        mse += diff * diff;
     }
+    mse /= (WIDTH * HEIGHT);
 
-    file.read(reinterpret_cast<char*>(img.data), width * height);
-
-    if (!file) {
-        cerr << "Error: File size does not match expected dimensions for " << filename << endl;
-        return Mat();
-    }
-
-    file.close();
-    return img;
+    return 10.0 * log10((MAX_VAL * MAX_VAL) / mse);
 }
 
-double calculatePSNR(const Mat& original, const Mat& denoised) {
-    Mat o_float, d_float;
-    original.convertTo(o_float, CV_32F);
-    denoised.convertTo(d_float, CV_32F);
+// Clamping for boundary condition
+unsigned char getPixel(const vector<unsigned char>& data, int x, int y) {
+    int nx = max(0, min(x, WIDTH - 1));
+    int ny = max(0, min(y, HEIGHT - 1));
+    return data[ny * WIDTH + nx];
+}
 
-    Mat diff;
-    absdiff(o_float, d_float, diff);
-    diff = diff.mul(diff);
+double getTheoreticalSigma(int size) {
+    return 0.3 * ((size - 1) * 0.5 - 1) + 0.8;
+}
 
-    Scalar s = sum(diff);
-    double sse = s.val[0];
-    double mse = sse / (double)(original.total());
+vector<unsigned char> applyUniformFilter(const vector<unsigned char>& input, int size) {
+    vector<unsigned char> output(WIDTH * HEIGHT);
+    int offset = size / 2;
+    double area = (double)(size * size);
 
-    if (mse <= 1e-10) return 0;
+    for (int y = 0; y < HEIGHT; ++y) {
+        for (int x = 0; x < WIDTH; ++x) {
+            double sum = 0;
+            for (int ky = -offset; ky <= offset; ++ky) {
+                for (int kx = -offset; kx <= offset; ++kx) {
+                    sum += getPixel(input, x + kx, y + ky);
+                }
+            }
+            // add 0.5 for rounding
+            output[y * WIDTH + x] = (unsigned char)(sum / area + 0.5);
+        }
+    }
+    return output;
+}
 
-    double max_pixel = 255.0;
-    double psnr = 10.0 * log10((max_pixel * max_pixel) / mse);
+// 2. Gaussian Filter
+vector<unsigned char> applyGaussianFilter(const vector<unsigned char>& input, int size, double sigma) {
+    vector<unsigned char> output(WIDTH * HEIGHT);
+    int offset = size / 2;
+    vector<vector<double>> kernel(size, vector<double>(size));
+    double sum_kernel = 0;
 
-    return psnr;
+    // Generate Kernel
+    for (int i = -offset; i <= offset; ++i) {
+        for (int j = -offset; j <= offset; ++j) {
+            double val = exp(-(i * i + j * j) / (2 * sigma * sigma));
+            kernel[i + offset][j + offset] = val;
+            sum_kernel += val;
+        }
+    }
+
+    // Apply Kernel
+    for (int y = 0; y < HEIGHT; ++y) {
+        for (int x = 0; x < WIDTH; ++x) {
+            double res = 0;
+            for (int ky = -offset; ky <= offset; ++ky) {
+                for (int kx = -offset; kx <= offset; ++kx) {
+                    res += getPixel(input, x + kx, y + ky) * kernel[ky + offset][kx + offset];
+                }
+            }
+            // add 0.5 for rounding
+            output[y * WIDTH + x] = (unsigned char)((res / sum_kernel) + 0.5);
+        }
+    }
+    return output;
 }
 
 int main() {
-    // 1. Load RAW Images
-    string clean_path = "flower_gray.raw";
-    string noisy_path = "flower_gray_noisy.raw"; // Assuming the noisy file is also raw
+    vector<unsigned char> original(WIDTH * HEIGHT);
+    vector<unsigned char> noisy(WIDTH * HEIGHT);
 
-    Mat img_original = readRawImage(clean_path, WIDTH, HEIGHT);
-    Mat img_noisy = readRawImage(noisy_path, WIDTH, HEIGHT);
-
-    if (img_original.empty() || img_noisy.empty()) {
-        return -1;
+    // File Loading
+    ifstream raw_orig("flower_gray.raw", ios::binary);
+    ifstream raw_noisy("flower_gray_noisy.raw", ios::binary);
+    
+    if (!raw_orig || !raw_noisy) {
+        cerr << "Error: Could not open .raw files." << endl;
+        return 1;
     }
 
-    vector<int> kernel_sizes = {3, 5, 7, 9};
+    raw_orig.read((char*)original.data(), WIDTH * HEIGHT);
+    raw_noisy.read((char*)noisy.data(), WIDTH * HEIGHT);
 
-    cout << "--- Initial Check ---" << endl;
-    cout << "Image Size: " << img_original.cols << "x" << img_original.rows << endl;
-    cout << "PSNR of Noisy Input: " << calculatePSNR(img_original, img_noisy) << " dB" << endl << endl;
+    cout << fixed << setprecision(5);
+    cout << "Initial Noisy PSNR: " << calculatePSNR(original, noisy) << " dB" << endl;
+    cout << "========================================" << endl;
 
-    cout << "--- Uniform Filter Results ---" << endl;
-    for (int k : kernel_sizes) {
-        Mat result;
-        blur(img_noisy, result, Size(k, k)); 
+    // Compare Uniform vs Gaussian with Theoretical Sigma
+    for (int kernel_size : {3, 5, 7, 9, 15}) {
         
-        double score = calculatePSNR(img_original, result);
-        cout << "Kernel [" << k << "x" << k << "] -> PSNR: " << score << " dB" << endl;
-    }
-    cout << endl;
+        // 1. Uniform
+        auto uniform = applyUniformFilter(noisy, kernel_size);
+        double psnr_uniform = calculatePSNR(original, uniform);
 
-    cout << "--- Gaussian Filter Results ---" << endl;
-    for (int k : kernel_sizes) {
-        Mat result;
-        GaussianBlur(img_noisy, result, Size(k, k), 0); 
+        // 2. Gaussian (Theoretical Sigma)
+        double sigma = getTheoreticalSigma(kernel_size);
+        auto gaussianTheoreticalSigma = applyGaussianFilter(noisy, kernel_size, sigma);
+        double psnr_gaussian = calculatePSNR(original, gaussianTheoreticalSigma);
+
+
+        auto gaussianLargeSigma = applyGaussianFilter(noisy, kernel_size, 100.0); 
+        double psnr_gaussian_large = calculatePSNR(original, gaussianLargeSigma);
+
+        cout << "Kernel " << kernel_size << "x" << kernel_size << " | Sigma: " << sigma << endl;
+        cout << "  Uniform PSNR:   " << psnr_uniform << " dB" << endl;
+        cout << "  Gaussian PSNR with Theoretical Sigma:  " << psnr_gaussian << " dB" << endl;
+        cout << "  Gaussian PSNR with Large Sigma:  " << psnr_gaussian_large << " dB" << endl;
         
-        double score = calculatePSNR(img_original, result);
-        cout << "Kernel [" << k << "x" << k << "] -> PSNR: " << score << " dB" << endl;
     }
 
     return 0;
