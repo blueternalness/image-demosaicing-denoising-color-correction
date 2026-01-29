@@ -53,9 +53,9 @@ int main() {
     double muB_after = sumB_after / TOTAL_PIXELS;
 
     cout << fixed << setprecision(4);
-    cout << "Means Before (R, G, B): " << muR << ", " << muG << ", " << muB << endl;
-    cout << "Target Mean (Global mu): " << mu << endl;
-    cout << "Means After  (R, G, B): " << muR_after << ", " << muG_after << ", " << muB_after << endl;
+    cout << "Means Before(R, G, B): " << muR << ", " << muG << ", " << muB << endl;
+    cout << "Target Mean(Global mu): " << mu << endl;
+    cout << "Means After(R, G, B): " << muR_after << ", " << muG_after << ", " << muB_after << endl;
 
     ofstream outFile("sea_awb.raw", ios::binary);
     outFile.write(reinterpret_cast<char*>(outData.data()), TOTAL_BYTES);

@@ -6,7 +6,7 @@
 const int WIDTH = 512;
 const int HEIGHT = 768;
 
-unsigned char getVal(const std::vector<unsigned char>& img, int r, int c, int w, int h) {
+unsigned char getPixel(const std::vector<unsigned char>& img, int r, int c, int w, int h) {
     if (r < 0) r = 0;
     if (r >= h) r = h - 1;
     if (c < 0) c = 0;
@@ -28,40 +28,40 @@ int main() {
     for (int r = 0; r < HEIGHT; ++r) {
         for (int c = 0; c < WIDTH; ++c) {
             float red = 0, green = 0, blue = 0;
-            unsigned char currentVal = getVal(bayerImg, r, c, WIDTH, HEIGHT);
+            unsigned char currentVal = getPixel(bayerImg, r, c, WIDTH, HEIGHT);
 
             if (r % 2 == 0) {
                 if (c % 2 == 0) { 
                     green = currentVal;
-                    red = (getVal(bayerImg, r, c - 1, WIDTH, HEIGHT) + getVal(bayerImg, r, c + 1, WIDTH, HEIGHT)) / 2.0f;
-                    blue = (getVal(bayerImg, r - 1, c, WIDTH, HEIGHT) + getVal(bayerImg, r + 1, c, WIDTH, HEIGHT)) / 2.0f;
+                    red = (getPixel(bayerImg, r, c - 1, WIDTH, HEIGHT) + getPixel(bayerImg, r, c + 1, WIDTH, HEIGHT)) / 2.0f;
+                    blue = (getPixel(bayerImg, r - 1, c, WIDTH, HEIGHT) + getPixel(bayerImg, r + 1, c, WIDTH, HEIGHT)) / 2.0f;
                 } else { 
                     red = currentVal;
-                    green = (getVal(bayerImg, r - 1, c, WIDTH, HEIGHT) + 
-                             getVal(bayerImg, r + 1, c, WIDTH, HEIGHT) +
-                             getVal(bayerImg, r, c - 1, WIDTH, HEIGHT) + 
-                             getVal(bayerImg, r, c + 1, WIDTH, HEIGHT)) / 4.0f;
-                    blue = (getVal(bayerImg, r - 1, c - 1, WIDTH, HEIGHT) + 
-                            getVal(bayerImg, r - 1, c + 1, WIDTH, HEIGHT) + 
-                            getVal(bayerImg, r + 1, c - 1, WIDTH, HEIGHT) + 
-                            getVal(bayerImg, r + 1, c + 1, WIDTH, HEIGHT)) / 4.0f;
+                    green = (getPixel(bayerImg, r - 1, c, WIDTH, HEIGHT) + 
+                             getPixel(bayerImg, r + 1, c, WIDTH, HEIGHT) +
+                             getPixel(bayerImg, r, c - 1, WIDTH, HEIGHT) + 
+                             getPixel(bayerImg, r, c + 1, WIDTH, HEIGHT)) / 4.0f;
+                    blue = (getPixel(bayerImg, r - 1, c - 1, WIDTH, HEIGHT) + 
+                            getPixel(bayerImg, r - 1, c + 1, WIDTH, HEIGHT) + 
+                            getPixel(bayerImg, r + 1, c - 1, WIDTH, HEIGHT) + 
+                            getPixel(bayerImg, r + 1, c + 1, WIDTH, HEIGHT)) / 4.0f;
                 }
             } else {
                 if (c % 2 == 0) {
 
                     blue = currentVal;
-                    green = (getVal(bayerImg, r - 1, c, WIDTH, HEIGHT) + 
-                             getVal(bayerImg, r + 1, c, WIDTH, HEIGHT) +
-                             getVal(bayerImg, r, c - 1, WIDTH, HEIGHT) + 
-                             getVal(bayerImg, r, c + 1, WIDTH, HEIGHT)) / 4.0f;
-                    red = (getVal(bayerImg, r - 1, c - 1, WIDTH, HEIGHT) + 
-                           getVal(bayerImg, r - 1, c + 1, WIDTH, HEIGHT) + 
-                           getVal(bayerImg, r + 1, c - 1, WIDTH, HEIGHT) + 
-                           getVal(bayerImg, r + 1, c + 1, WIDTH, HEIGHT)) / 4.0f;
+                    green = (getPixel(bayerImg, r - 1, c, WIDTH, HEIGHT) + 
+                             getPixel(bayerImg, r + 1, c, WIDTH, HEIGHT) +
+                             getPixel(bayerImg, r, c - 1, WIDTH, HEIGHT) + 
+                             getPixel(bayerImg, r, c + 1, WIDTH, HEIGHT)) / 4.0f;
+                    red = (getPixel(bayerImg, r - 1, c - 1, WIDTH, HEIGHT) + 
+                           getPixel(bayerImg, r - 1, c + 1, WIDTH, HEIGHT) + 
+                           getPixel(bayerImg, r + 1, c - 1, WIDTH, HEIGHT) + 
+                           getPixel(bayerImg, r + 1, c + 1, WIDTH, HEIGHT)) / 4.0f;
                 } else {
                     green = currentVal;
-                    blue = (getVal(bayerImg, r, c - 1, WIDTH, HEIGHT) + getVal(bayerImg, r, c + 1, WIDTH, HEIGHT)) / 2.0f;
-                    red = (getVal(bayerImg, r - 1, c, WIDTH, HEIGHT) + getVal(bayerImg, r + 1, c, WIDTH, HEIGHT)) / 2.0f;
+                    blue = (getPixel(bayerImg, r, c - 1, WIDTH, HEIGHT) + getPixel(bayerImg, r, c + 1, WIDTH, HEIGHT)) / 2.0f;
+                    red = (getPixel(bayerImg, r - 1, c, WIDTH, HEIGHT) + getPixel(bayerImg, r + 1, c, WIDTH, HEIGHT)) / 2.0f;
                 }
             }
 
