@@ -6,7 +6,6 @@
 
 using namespace std;
 
-// Image dimensions
 const int WIDTH = 768;
 const int HEIGHT = 512;
 const int CHANNELS = 3;
@@ -14,10 +13,6 @@ const int IMG_SIZE = WIDTH * HEIGHT * CHANNELS;
 
 unsigned char* readRawImage(const char* filename) {
     FILE* file = fopen(filename, "rb");
-    if (!file) {
-        cerr << "Error: Could not open input file " << filename << endl;
-        exit(1);
-    }
     unsigned char* imageData = new unsigned char[IMG_SIZE];
     fread(imageData, sizeof(unsigned char), IMG_SIZE, file);
     fclose(file);
@@ -26,10 +21,6 @@ unsigned char* readRawImage(const char* filename) {
 
 void writeRawImage(const char* filename, unsigned char* imageData) {
     FILE* file = fopen(filename, "wb");
-    if (!file) {
-        cerr << "Error: Could not open output file " << filename << endl;
-        exit(1);
-    }
     fwrite(imageData, sizeof(unsigned char), IMG_SIZE, file);
     fclose(file);
 }
@@ -67,13 +58,9 @@ void applyMedianFilter(unsigned char* input, unsigned char* output, int width, i
     }
 }
 
-// NEW: Bilateral Filter Implementation
-// Sigma_d: Spatial parameter (how much to smooth based on distance)
-// Sigma_r: Range parameter (how much to smooth based on color difference)
 void applyBilateralFilter(unsigned char* input, unsigned char* output, int width, int height, double sigma_d, double sigma_r) {
-    int kernelRadius = 2; // 5x5 window (Radius 2)
+    int kernelRadius = 2; // 5x5
     
-    // Pre-compute spatial Gaussian weights to save time
     int kernelSize = 2 * kernelRadius + 1;
     vector<double> spatialWeights(kernelSize * kernelSize);
     for (int ky = -kernelRadius; ky <= kernelRadius; ++ky) {
@@ -99,11 +86,9 @@ void applyBilateralFilter(unsigned char* input, unsigned char* output, int width
 
                         double neighborPixelVal = static_cast<double>(input[(ny * width + nx) * CHANNELS + c]);
                         
-                        // Range weight (Intensity difference)
                         double diff = centerPixelVal - neighborPixelVal;
                         double rangeWeight = exp(-(diff * diff) / (2 * sigma_r * sigma_r));
 
-                        // Spatial weight (from pre-computed table)
                         double spatialWeight = spatialWeights[(ky + kernelRadius) * kernelSize + (kx + kernelRadius)];
 
                         double weight = spatialWeight * rangeWeight;
@@ -130,29 +115,17 @@ int main() {
     unsigned char* medianFilteredImage = new unsigned char[IMG_SIZE];
     unsigned char* finalDenoisedImage = new unsigned char[IMG_SIZE];
 
-    // Step 1: Median Filter (Removes Salt-and-Pepper)
-    cout << "Applying Median Filter..." << endl;
     applyMedianFilter(noisyImage, medianFilteredImage, WIDTH, HEIGHT);
 
-    // Step 2: Bilateral Filter (Removes Gaussian Noise + Preserves Edges)
-    // Parameters: sigma_d = 2.0 (Spatial), sigma_r = 30.0 (Intensity/Range)
-    cout << "Applying Bilateral Filter..." << endl;
     applyBilateralFilter(medianFilteredImage, finalDenoisedImage, WIDTH, HEIGHT, 2.0, 30.0);
 
-    cout << "Saving result..." << endl;
     writeRawImage(outputFileName, finalDenoisedImage);
 
-    // Calculate Performance
     double psnrNoisy = calculatePSNR(originalImage, noisyImage);
     cout << "PSNR (Noisy Image): " << psnrNoisy << " dB" << endl;
 
     double psnrDenoised = calculatePSNR(originalImage, finalDenoisedImage);
     cout << "PSNR (Denoised Image): " << psnrDenoised << " dB" << endl;
-
-    delete[] originalImage;
-    delete[] noisyImage;
-    delete[] medianFilteredImage;
-    delete[] finalDenoisedImage;
 
     return 0;
 }

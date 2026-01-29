@@ -3,7 +3,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
-#include <iomanip> // For std::setprecision
+#include <iomanip>
 
 using namespace std;
 
@@ -46,7 +46,7 @@ double calculatePSNR(const vector<unsigned char>& original, const vector<unsigne
     return 10.0 * log10((MAX_VAL * MAX_VAL) / mse);
 }
 
-// Clamping for boundary condition
+// Clamping
 unsigned char getPixel(const vector<unsigned char>& data, int x, int y) {
     int nx = max(0, min(x, WIDTH - 1));
     int ny = max(0, min(y, HEIGHT - 1));
@@ -77,14 +77,12 @@ vector<unsigned char> applyUniformFilter(const vector<unsigned char>& input, int
     return output;
 }
 
-// 2. Gaussian Filter
 vector<unsigned char> applyGaussianFilter(const vector<unsigned char>& input, int size, double sigma) {
     vector<unsigned char> output(WIDTH * HEIGHT);
     int offset = size / 2;
     vector<vector<double>> kernel(size, vector<double>(size));
     double sum_kernel = 0;
 
-    // Generate Kernel
     for (int i = -offset; i <= offset; ++i) {
         for (int j = -offset; j <= offset; ++j) {
             double val = exp(-(i * i + j * j) / (2 * sigma * sigma));
@@ -93,7 +91,6 @@ vector<unsigned char> applyGaussianFilter(const vector<unsigned char>& input, in
         }
     }
 
-    // Apply Kernel
     for (int y = 0; y < HEIGHT; ++y) {
         for (int x = 0; x < WIDTH; ++x) {
             double res = 0;
@@ -113,30 +110,19 @@ int main() {
     vector<unsigned char> original(WIDTH * HEIGHT);
     vector<unsigned char> noisy(WIDTH * HEIGHT);
 
-    // File Loading
     ifstream raw_orig("flower_gray.raw", ios::binary);
     ifstream raw_noisy("flower_gray_noisy.raw", ios::binary);
-    
-    if (!raw_orig || !raw_noisy) {
-        cerr << "Error: Could not open .raw files." << endl;
-        return 1;
-    }
 
     raw_orig.read((char*)original.data(), WIDTH * HEIGHT);
     raw_noisy.read((char*)noisy.data(), WIDTH * HEIGHT);
 
     cout << fixed << setprecision(5);
     cout << "Initial Noisy PSNR: " << calculatePSNR(original, noisy) << " dB" << endl;
-    cout << "========================================" << endl;
-
-    // Compare Uniform vs Gaussian with Theoretical Sigma
     for (int kernel_size : {3, 5, 7, 9, 15}) {
         
-        // 1. Uniform
         auto uniform = applyUniformFilter(noisy, kernel_size);
         double psnr_uniform = calculatePSNR(original, uniform);
 
-        // 2. Gaussian (Theoretical Sigma)
         double sigma = getTheoreticalSigma(kernel_size);
         auto gaussianTheoreticalSigma = applyGaussianFilter(noisy, kernel_size, sigma);
         double psnr_gaussian = calculatePSNR(original, gaussianTheoreticalSigma);

@@ -17,17 +17,9 @@ struct PixelInfo {
 
 std::vector<unsigned char> readRaw(const std::string& filename) {
     std::ifstream inFile(filename, std::ios::binary);
-    if (!inFile) {
-        std::cerr << "Error: Could not open " << filename << std::endl;
-        exit(1);
-    }
     std::vector<unsigned char> img(std::istreambuf_iterator<char>(inFile), {});
     inFile.close();
     
-    if (img.size() != NUM_PIXELS) {
-        std::cerr << "Warning: File size (" << img.size() << ") != " 
-                  << WIDTH << "x" << HEIGHT << ". Check dimensions!" << std::endl;
-    }
     return img;
 }
 
@@ -35,7 +27,6 @@ void writeRaw(const std::string& filename, const std::vector<unsigned char>& img
     std::ofstream outFile(filename, std::ios::binary);
     outFile.write(reinterpret_cast<const char*>(img.data()), img.size());
     outFile.close();
-    std::cout << "Saved: " << filename << std::endl;
 }
 
 void saveCSV(const std::string& filename, const std::vector<int>& data, const std::string& header) {
@@ -45,7 +36,6 @@ void saveCSV(const std::string& filename, const std::vector<int>& data, const st
         file << i << "," << data[i] << "\n";
     }
     file.close();
-    std::cout << "Data saved for plotting: " << filename << std::endl;
 }
 
 std::vector<int> computeHistogram(const std::vector<unsigned char>& img) {
@@ -125,6 +115,5 @@ int main() {
     std::vector<int> cdfB = computeCDF(histB);
     saveCSV("methodB_cdf.csv", cdfB, "Intensity,Cumulative_Count");
 
-    std::cout << "Done! All images and CSV data files generated." << std::endl;
     return 0;
 }

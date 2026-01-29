@@ -8,26 +8,19 @@
 using namespace cv;
 using namespace std;
 
-// --- Configuration ---
 const int WIDTH = 768;
 const int HEIGHT = 512;
 const string CLEAN_FILE = "flower_gray.raw";
 const string NOISY_FILE = "flower_gray_noisy.raw";
 
-// --- Helper: Read RAW Image ---
 Mat readRawImage(const string& filename, int width, int height) {
     Mat img(height, width, CV_8UC1);
     ifstream file(filename, ios::binary);
-    if (!file) {
-        cerr << "Error: Could not open file " << filename << endl;
-        return Mat();
-    }
     file.read(reinterpret_cast<char*>(img.data), width * height);
     file.close();
     return img;
 }
 
-// --- Helper: Calculate PSNR ---
 double calculatePSNR(const Mat& original, const Mat& denoised) {
     Mat o_float, d_float;
     original.convertTo(o_float, CV_32F);
@@ -40,30 +33,26 @@ double calculatePSNR(const Mat& original, const Mat& denoised) {
     Scalar s = sum(diff);
     double mse = s.val[0] / (double)(original.total());
 
-    if(mse == 0) return 100.0; // Perfect match
+    if(mse == 0) return 100.0;
 
     double max_pixel = 255.0;
     return 10.0 * log10((max_pixel * max_pixel) / mse);
 }
 
 int main() {
-    // 1. Load Data
     Mat img_original = readRawImage(CLEAN_FILE, WIDTH, HEIGHT);
     Mat img_noisy = readRawImage(NOISY_FILE, WIDTH, HEIGHT);
 
     if (img_original.empty() || img_noisy.empty()) return -1;
 
     cout << fixed << setprecision(2);
-    cout << "=== NLM Parameter Analysis ===" << endl;
     cout << "Baseline (Noisy) PSNR: " << calculatePSNR(img_original, img_noisy) << " dB" << endl << endl;
 
-    // Defaults for baseline comparison
     float default_h = 10.0;
     int default_template = 7;
     int default_search = 21;
 
-    // --- Experiment 1: Filter Strength h (Smoothing parameter) ---
-    cout << "--- 1. Effect of Filter Strength (h) ---" << endl;
+    cout << "--- Filter Strength (h) ---" << endl;
     cout << "Fixed: Patch=7, Search=21" << endl;
     vector<float> h_values = {3, 5, 10, 15, 20, 25,30,35};
     
@@ -79,15 +68,12 @@ int main() {
         if (psnr > best_psnr) {
             best_psnr = psnr;
             best_h = h;
-            cout << " *Current Best*";
         }
         cout << endl;
     }
     cout << endl;
 
-    // --- Experiment 2: Patch Size N' (Template Window) ---
-    // We use the best_h found above to see how patch size affects it
-    cout << "--- 2. Effect of Patch Size N' (Template Window) ---" << endl;
+    cout << "--- Patch Size N' (Template Window) ---" << endl;
     cout << "Fixed: h=" << best_h << ", Search=21" << endl;
     vector<int> template_sizes = {3, 5, 7, 9, 11}; // Must be odd
 
@@ -99,15 +85,12 @@ int main() {
     }
     cout << endl;
 
-    // --- Experiment 3: Search Window Size Aleph (Search Window) ---
-    // We use best_h and default template (or you could use best template)
-    cout << "--- 3. Effect of Search Window Size Aleph ---" << endl;
+    cout << "--- Search Window Size Aleph ---" << endl;
     cout << "Fixed: h=" << best_h << ", Patch=7" << endl;
-    vector<int> search_sizes = {11, 21, 31, 41}; // Must be odd
+    vector<int> search_sizes = {11, 21, 31, 41};
 
     for (int s : search_sizes) {
         Mat result;
-        // Measure time to show performance impact (optional but good for report)
         double t = (double)getTickCount();
         
         fastNlMeansDenoising(img_noisy, result, best_h, default_template, s);
@@ -120,12 +103,6 @@ int main() {
              << " | Time: " << t << " sec" << endl;
     }
     cout << endl;
-
-    // --- Theoretical Note for Report ---
-    cout << "--- 4. Theoretical Note on Parameter 'a' ---" << endl;
-    cout << "OpenCV does not expose parameter 'a' (Gaussian smoothing inside the patch)." << endl;
-    cout << "Theoretical analysis: 'a' controls the weight of pixels within the neighbor patch." << endl;
-    cout << "OpenCV effectively uses a uniform weight (a -> infinity), treating all pixels in the patch equally." << endl;
 
     return 0;
 }

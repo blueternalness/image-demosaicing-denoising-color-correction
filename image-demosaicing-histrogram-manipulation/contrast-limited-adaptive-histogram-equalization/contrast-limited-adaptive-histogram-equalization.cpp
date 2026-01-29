@@ -11,10 +11,6 @@ const int NUM_PIXELS = WIDTH * HEIGHT;
 
 std::vector<unsigned char> readRaw(const std::string& filename) {
     std::ifstream inFile(filename, std::ios::binary);
-    if (!inFile) {
-        std::cerr << "Error: Could not open " << filename << std::endl;
-        exit(1);
-    }
     std::vector<unsigned char> img(std::istreambuf_iterator<char>(inFile), {});
     inFile.close();
     return img;
@@ -24,7 +20,6 @@ void writeRaw(const std::string& filename, const std::vector<unsigned char>& img
     std::ofstream outFile(filename, std::ios::binary);
     outFile.write(reinterpret_cast<const char*>(img.data()), img.size());
     outFile.close();
-    std::cout << "Saved: " << filename << std::endl;
 }
 
 struct YUV {
@@ -118,11 +113,6 @@ std::vector<unsigned char> applyCLAHE(const std::vector<unsigned char>& channel)
 int main() {
     std::string filename = "towers.raw";
     std::vector<unsigned char> rgbImg = readRaw(filename);
-
-    if(rgbImg.size() != NUM_PIXELS * 3) {
-        std::cerr << "Error: File size does not match defined dimensions.\n";
-        return 1;
-    }
 
     YUV imgYUV = rgb2yuv(rgbImg);
     

@@ -19,20 +19,9 @@ int main() {
     std::string outputFilename = "sailboats_demosaiced.raw";
 
     std::ifstream inFile(inputFilename, std::ios::binary);
-    if (!inFile) {
-        std::cerr << "Error: Could not open " << inputFilename << std::endl;
-        return 1;
-    }
 
     std::vector<unsigned char> bayerImg(std::istreambuf_iterator<char>(inFile), {});
     inFile.close();
-
-    if (bayerImg.size() != WIDTH * HEIGHT) {
-        std::cerr << "Error: File size (" << bayerImg.size() 
-                  << ") does not match specified dimensions " 
-                  << WIDTH << "x" << HEIGHT << " = " << (WIDTH*HEIGHT) << std::endl;
-        return 1;
-    }
 
     std::vector<unsigned char> rgbImg(WIDTH * HEIGHT * 3);
     
@@ -84,17 +73,9 @@ int main() {
     }
 
     std::ofstream outFile(outputFilename, std::ios::binary);
-    if (!outFile) {
-        std::cerr << "Error: Could not write to " << outputFilename << std::endl;
-        return 1;
-    }
 
     outFile.write(reinterpret_cast<char*>(rgbImg.data()), rgbImg.size());
     outFile.close();
-
-    std::cout << "Success! Saved to " << outputFilename << std::endl;
-    std::cout << "Output Size: " << rgbImg.size() << " bytes." << std::endl;
-    std::cout << "Resolution: " << WIDTH << " x " << HEIGHT << std::endl;
     
     return 0;
 }

@@ -10,7 +10,6 @@ using namespace std;
 const int WIDTH = 768;
 const int HEIGHT = 512;
 
-// --- Helper Functions ---
 inline unsigned char getPixel(const vector<unsigned char>& data, int x, int y, int width, int height) {
     int c = max(0, min(x, width - 1));
     int r = max(0, min(y, height - 1));
@@ -20,13 +19,9 @@ inline unsigned char getPixel(const vector<unsigned char>& data, int x, int y, i
 vector<unsigned char> readRawImage(const string& filename, int width, int height) {
     vector<unsigned char> img(width * height);
     ifstream file(filename, ios::binary);
-    if (file) {
-        file.read(reinterpret_cast<char*>(img.data()), width * height);
-        file.close();
-    } else {
-        cerr << "Error: Could not open file " << filename << endl;
-        img.clear();
-    }
+    file.read(reinterpret_cast<char*>(img.data()), width * height);
+    file.close();
+
     return img;
 }
 
@@ -42,7 +37,6 @@ double calculatePSNR(const vector<unsigned char>& original, const vector<unsigne
     return 10.0 * log10((255.0 * 255.0) / mse);
 }
 
-// --- Bilateral Filter ---
 void applyBilateralFilter(const vector<unsigned char>& src, vector<unsigned char>& dst, 
                           int width, int height, 
                           int kernel_radius, double sigma_c, double sigma_s) {
@@ -82,7 +76,6 @@ void applyBilateralFilter(const vector<unsigned char>& src, vector<unsigned char
     }
 }
 
-// --- Main Analysis ---
 struct TestResult {
     double sigma_c;
     double sigma_s;
@@ -100,16 +93,13 @@ int main() {
     int kernel_radius = 2; 
     
     vector<double> sigma_c_values = { 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 20.0, 40.0, 80.0, 150.0 }; 
-    
-    // Sigma S (Intensity)
     vector<double> sigma_s_values = { 10.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 150.0, 300.0 };
 
     vector<TestResult> results;
     TestResult best_result = {0, 0, -1.0};
 
-    cout << "--- 5x5 Bilateral Filter Analysis ---" << endl;
-    cout << "Kernel Radius: " << kernel_radius << " (Size: 5x5)" << endl;
-    cout << "|   Sigma C   |   Sigma S   |   PSNR (dB)   |" << endl;
+    cout << "--- 5x5 ---" << endl;
+    cout << "Sigma C|Sigma S|PSNR (dB)|" << endl;
 
     for (double sc : sigma_c_values) {
         for (double ss : sigma_s_values) {
@@ -122,13 +112,11 @@ int main() {
 
             if (psnr > best_result.psnr) best_result = current;
 
-            cout << "| " << setw(11) << sc << " | " << setw(11) << ss << " | " << setw(13) << psnr << " |" << endl;
+            cout << "| " << sc << " | " << ss << " | " << psnr << " |" << endl;
         }
     }
 
-    cout << "----------------------------------------------------" << endl;
-    cout << "Best 5x5 Config: Sigma C=" << best_result.sigma_c 
-         << ", Sigma S=" << best_result.sigma_s << " -> PSNR: " << best_result.psnr << " dB" << endl;
+    cout << "Best 5x5 Config: Sigma C=" << best_result.sigma_c << ", Sigma S=" << best_result.sigma_s << "PSNR: " << best_result.psnr << " dB" << endl;
 
     return 0;
 }
