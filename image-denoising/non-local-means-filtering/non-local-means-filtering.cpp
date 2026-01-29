@@ -98,9 +98,7 @@ int main() {
         t = ((double)getTickCount() - t) / getTickFrequency();
         double psnr = calculatePSNR(img_original, result);
         
-        cout << "Search Size=" << setw(2) << s 
-             << " -> PSNR: " << psnr << " dB" 
-             << " | Time: " << t << " sec" << endl;
+        cout << "Search Size=" << setw(2) << s << " -> PSNR: " << psnr << " dB" << " | Time: " << t << " sec" << endl;
     }
     cout << endl;
 
