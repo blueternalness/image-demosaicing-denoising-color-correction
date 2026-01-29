@@ -1,1 +1,3 @@
-g++ -std=c++17 non-local-means-filtering.cpp -o non-local-means-filtering
+g++ -std=c++17 non-local-means-filtering.cpp \
+    -o non-local-means-filtering \
+    `pkg-config --cflags --libs opencv4`
