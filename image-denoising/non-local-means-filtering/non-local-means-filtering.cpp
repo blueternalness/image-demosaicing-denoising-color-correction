@@ -39,7 +39,8 @@ double calculatePSNR(const Mat& original, const Mat& denoised) {
 
     Scalar s = sum(diff);
     double mse = s.val[0] / (double)(original.total());
-    if (mse <= 1e-10) return 0;
+
+    if(mse == 0) return 100.0; // Perfect match
 
     double max_pixel = 255.0;
     return 10.0 * log10((max_pixel * max_pixel) / mse);
@@ -53,62 +54,78 @@ int main() {
     if (img_original.empty() || img_noisy.empty()) return -1;
 
     cout << fixed << setprecision(2);
-    cout << "--- Baseline ---" << endl;
-    cout << "Noisy Image PSNR: " << calculatePSNR(img_original, img_noisy) << " dB" << endl << endl;
+    cout << "=== NLM Parameter Analysis ===" << endl;
+    cout << "Baseline (Noisy) PSNR: " << calculatePSNR(img_original, img_noisy) << " dB" << endl << endl;
 
-    // 2. Experiment with NLM Parameters
-    // OpenCV fastNlMeansDenoising parameters mapping:
-    // h: Filtering strength (the 'h' in the formula)
-    // templateWindowSize: Size of the patch (small neighbor window, 'N_prime' or patch size)
-    // searchWindowSize: Size of the search area (big search window, 'Aleph')
+    // Defaults for baseline comparison
+    float default_h = 10.0;
+    int default_template = 7;
+    int default_search = 21;
+
+    // --- Experiment 1: Filter Strength h (Smoothing parameter) ---
+    cout << "--- 1. Effect of Filter Strength (h) ---" << endl;
+    cout << "Fixed: Patch=7, Search=21" << endl;
+    vector<float> h_values = {3, 5, 10, 15, 20, 25,30,35};
     
-    // We will vary 'h' to find the sweet spot, keeping window sizes constant initially
-    vector<float> h_values = {5, 10, 15, 20, 25};
-    int templateWindowSize = 7; // Common default (7x7 patch)
-    int searchWindowSize = 21;  // Common default (21x21 search area)
-
-    cout << "--- NLM Parameter Experiment (Varying h) ---" << endl;
     double best_psnr = 0;
-    float best_h = 0;
+    float best_h = 10;
 
     for (float h : h_values) {
         Mat result;
-        // fastNlMeansDenoising(src, dst, h, templateWindowSize, searchWindowSize)
-        fastNlMeansDenoising(img_noisy, result, h, templateWindowSize, searchWindowSize);
+        fastNlMeansDenoising(img_noisy, result, h, default_template, default_search);
+        double psnr = calculatePSNR(img_original, result);
         
-        double score = calculatePSNR(img_original, result);
-        cout << "h=" << h << ", PatchSize=" << templateWindowSize 
-             << ", SearchSize=" << searchWindowSize 
-             << " -> PSNR: " << score << " dB" << endl;
-
-        if (score > best_psnr) {
-            best_psnr = score;
+        cout << "h=" << setw(2) << h << " -> PSNR: " << psnr << " dB";
+        if (psnr > best_psnr) {
+            best_psnr = psnr;
             best_h = h;
+            cout << " *Current Best*";
         }
+        cout << endl;
     }
     cout << endl;
 
-    // 3. Analyze effect of Patch Size (Template Window) using the best h
-    cout << "--- NLM Parameter Experiment (Varying Patch Size) ---" << endl;
-    vector<int> patch_sizes = {3, 5, 7, 9};
-    for (int p : patch_sizes) {
+    // --- Experiment 2: Patch Size N' (Template Window) ---
+    // We use the best_h found above to see how patch size affects it
+    cout << "--- 2. Effect of Patch Size N' (Template Window) ---" << endl;
+    cout << "Fixed: h=" << best_h << ", Search=21" << endl;
+    vector<int> template_sizes = {3, 5, 7, 9, 11}; // Must be odd
+
+    for (int t : template_sizes) {
         Mat result;
-        fastNlMeansDenoising(img_noisy, result, best_h, p, searchWindowSize);
-        double score = calculatePSNR(img_original, result);
-        cout << "h=" << best_h << ", PatchSize=" << p 
-             << ", SearchSize=" << searchWindowSize 
-             << " -> PSNR: " << score << " dB" << endl;
+        fastNlMeansDenoising(img_noisy, result, best_h, t, default_search);
+        double psnr = calculatePSNR(img_original, result);
+        cout << "Patch Size=" << setw(2) << t << " -> PSNR: " << psnr << " dB" << endl;
     }
+    cout << endl;
 
-    // 4. Final Best Result
-    cout << "\n--- Final Recommendation ---" << endl;
-    cout << "Based on experiments, a good choice is likely h=" << best_h 
-         << " with PatchSize=7." << endl;
+    // --- Experiment 3: Search Window Size Aleph (Search Window) ---
+    // We use best_h and default template (or you could use best template)
+    cout << "--- 3. Effect of Search Window Size Aleph ---" << endl;
+    cout << "Fixed: h=" << best_h << ", Patch=7" << endl;
+    vector<int> search_sizes = {11, 21, 31, 41}; // Must be odd
 
-    // Optional: Save output
-    // Mat final_result;
-    // fastNlMeansDenoising(img_noisy, final_result, best_h, 7, 21);
-    // imwrite("nlm_result.png", final_result);
+    for (int s : search_sizes) {
+        Mat result;
+        // Measure time to show performance impact (optional but good for report)
+        double t = (double)getTickCount();
+        
+        fastNlMeansDenoising(img_noisy, result, best_h, default_template, s);
+        
+        t = ((double)getTickCount() - t) / getTickFrequency();
+        double psnr = calculatePSNR(img_original, result);
+        
+        cout << "Search Size=" << setw(2) << s 
+             << " -> PSNR: " << psnr << " dB" 
+             << " | Time: " << t << " sec" << endl;
+    }
+    cout << endl;
+
+    // --- Theoretical Note for Report ---
+    cout << "--- 4. Theoretical Note on Parameter 'a' ---" << endl;
+    cout << "OpenCV does not expose parameter 'a' (Gaussian smoothing inside the patch)." << endl;
+    cout << "Theoretical analysis: 'a' controls the weight of pixels within the neighbor patch." << endl;
+    cout << "OpenCV effectively uses a uniform weight (a -> infinity), treating all pixels in the patch equally." << endl;
 
     return 0;
 }
