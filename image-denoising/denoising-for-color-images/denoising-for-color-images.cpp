@@ -1,110 +1,158 @@
-#include <opencv2/opencv.hpp>
 #include <iostream>
-#include <fstream>
-#include <cmath>
 #include <vector>
+#include <algorithm>
+#include <cstdio>
+#include <cmath>
 
-using namespace cv;
 using namespace std;
 
-// --- Configuration ---
+// Image dimensions
 const int WIDTH = 768;
 const int HEIGHT = 512;
-const int CHANNELS = 3; // RGB Image
+const int CHANNELS = 3;
+const int IMG_SIZE = WIDTH * HEIGHT * CHANNELS;
 
-// --- Helper: Read Color RAW Image ---
-// Reads 768x512x3 bytes. Assumes Interleaved RGB (R, G, B, R, G, B...)
-Mat readRawImageRGB(const string& filename, int width, int height) {
-    // CV_8UC3 means 8-bit Unsigned, 3 Channels
-    Mat img(height, width, CV_8UC3);
-    
-    ifstream file(filename, ios::binary);
+unsigned char* readRawImage(const char* filename) {
+    FILE* file = fopen(filename, "rb");
     if (!file) {
-        cerr << "Error: Could not open file " << filename << endl;
-        return Mat();
+        cerr << "Error: Could not open input file " << filename << endl;
+        exit(1);
     }
-    
-    // Read strictly width * height * 3 bytes
-    file.read(reinterpret_cast<char*>(img.data), width * height * 3);
-    
-    if (!file) {
-        cerr << "Warning: File size might be smaller than expected!" << endl;
-    }
-    file.close();
-    
-    // Note: If the raw data is Planar (RRR...GGG...BBB), you would need a different read method.
-    // Standard .raw for this course is usually Interleaved (RGBRGB...), but if colors look weird,
-    // convert from BGR to RGB: cvtColor(img, img, COLOR_RGB2BGR);
-    return img;
+    unsigned char* imageData = new unsigned char[IMG_SIZE];
+    fread(imageData, sizeof(unsigned char), IMG_SIZE, file);
+    fclose(file);
+    return imageData;
 }
 
-// --- Helper: Calculate PSNR for Color Images ---
-// Formula: Average MSE across R, G, B channels, then calculate PSNR
-double calculatePSNR_RGB(const Mat& original, const Mat& denoised) {
-    Mat o_float, d_float;
-    original.convertTo(o_float, CV_32F);
-    denoised.convertTo(d_float, CV_32F);
+void writeRawImage(const char* filename, unsigned char* imageData) {
+    FILE* file = fopen(filename, "wb");
+    if (!file) {
+        cerr << "Error: Could not open output file " << filename << endl;
+        exit(1);
+    }
+    fwrite(imageData, sizeof(unsigned char), IMG_SIZE, file);
+    fclose(file);
+}
 
-    Mat diff;
-    absdiff(o_float, d_float, diff); // |Y - X|
-    diff = diff.mul(diff);           // (Y - X)^2
+double calculatePSNR(unsigned char* original, unsigned char* denoised) {
+    double mse = 0.0;
+    for (int i = 0; i < IMG_SIZE; ++i) {
+        double diff = static_cast<double>(original[i]) - static_cast<double>(denoised[i]);
+        mse += diff * diff;
+    }
+    mse /= IMG_SIZE;
+    if (mse == 0) return 100.0;
+    return 10.0 * log10((255.0 * 255.0) / mse);
+}
 
-    Scalar s = sum(diff); // Sum of all channels
+void applyMedianFilter(unsigned char* input, unsigned char* output, int width, int height) {
+    int windowSize = 3;
+    int offset = windowSize / 2;
+
+    for (int c = 0; c < CHANNELS; ++c) {
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                vector<unsigned char> window;
+                for (int ky = -offset; ky <= offset; ++ky) {
+                    for (int kx = -offset; kx <= offset; ++kx) {
+                        int ny = min(max(y + ky, 0), height - 1);
+                        int nx = min(max(x + kx, 0), width - 1);
+                        window.push_back(input[(ny * width + nx) * CHANNELS + c]);
+                    }
+                }
+                sort(window.begin(), window.end());
+                output[(y * width + x) * CHANNELS + c] = window[window.size() / 2];
+            }
+        }
+    }
+}
+
+// NEW: Bilateral Filter Implementation
+// Sigma_d: Spatial parameter (how much to smooth based on distance)
+// Sigma_r: Range parameter (how much to smooth based on color difference)
+void applyBilateralFilter(unsigned char* input, unsigned char* output, int width, int height, double sigma_d, double sigma_r) {
+    int kernelRadius = 2; // 5x5 window (Radius 2)
     
-    // Total number of values = Width * Height * 3
-    double sse = s.val[0] + s.val[1] + s.val[2];
-    double mse = sse / (double)(original.total() * original.channels());
+    // Pre-compute spatial Gaussian weights to save time
+    int kernelSize = 2 * kernelRadius + 1;
+    vector<double> spatialWeights(kernelSize * kernelSize);
+    for (int ky = -kernelRadius; ky <= kernelRadius; ++ky) {
+        for (int kx = -kernelRadius; kx <= kernelRadius; ++kx) {
+            double distSq = ky * ky + kx * kx;
+            spatialWeights[(ky + kernelRadius) * kernelSize + (kx + kernelRadius)] = exp(-distSq / (2 * sigma_d * sigma_d));
+        }
+    }
 
-    if (mse <= 1e-10) return 0;
+    for (int c = 0; c < CHANNELS; ++c) {
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                
+                double sumWeights = 0.0;
+                double sumValues = 0.0;
+                double centerPixelVal = static_cast<double>(input[(y * width + x) * CHANNELS + c]);
 
-    double max_pixel = 255.0;
-    double psnr = 10.0 * log10((max_pixel * max_pixel) / mse);
+                for (int ky = -kernelRadius; ky <= kernelRadius; ++ky) {
+                    for (int kx = -kernelRadius; kx <= kernelRadius; ++kx) {
+                        
+                        int ny = min(max(y + ky, 0), height - 1);
+                        int nx = min(max(x + kx, 0), width - 1);
 
-    return psnr;
+                        double neighborPixelVal = static_cast<double>(input[(ny * width + nx) * CHANNELS + c]);
+                        
+                        // Range weight (Intensity difference)
+                        double diff = centerPixelVal - neighborPixelVal;
+                        double rangeWeight = exp(-(diff * diff) / (2 * sigma_r * sigma_r));
+
+                        // Spatial weight (from pre-computed table)
+                        double spatialWeight = spatialWeights[(ky + kernelRadius) * kernelSize + (kx + kernelRadius)];
+
+                        double weight = spatialWeight * rangeWeight;
+
+                        sumValues += neighborPixelVal * weight;
+                        sumWeights += weight;
+                    }
+                }
+                
+                output[(y * width + x) * CHANNELS + c] = static_cast<unsigned char>(min(max(sumValues / sumWeights, 0.0), 255.0));
+            }
+        }
+    }
 }
 
 int main() {
-    // 1. Load Color Images
-    // Assuming filenames are flower.raw and flower_noisy.raw based on the prompt
-    string clean_path = "flower.raw"; 
-    string noisy_path = "flower_noisy.raw"; 
+    const char* originalFileName = "flower.raw";       
+    const char* noisyFileName = "flower_noisy.raw";    
+    const char* outputFileName = "flower_denoised_bilateral.raw"; 
 
-    Mat img_original = readRawImageRGB(clean_path, WIDTH, HEIGHT);
-    Mat img_noisy = readRawImageRGB(noisy_path, WIDTH, HEIGHT);
-
-    if (img_original.empty() || img_noisy.empty()) return -1;
+    unsigned char* originalImage = readRawImage(originalFileName); 
+    unsigned char* noisyImage = readRawImage(noisyFileName);
     
-    // Convert RGB to BGR for proper display in OpenCV (OpenCV uses BGR by default)
-    // If your RAW is RGB, this swaps it to BGR. If RAW is BGR, comment this out.
-    cvtColor(img_original, img_original, COLOR_RGB2BGR);
-    cvtColor(img_noisy, img_noisy, COLOR_RGB2BGR);
+    unsigned char* medianFilteredImage = new unsigned char[IMG_SIZE];
+    unsigned char* finalDenoisedImage = new unsigned char[IMG_SIZE];
 
-    cout << "--- Initial Check ---" << endl;
-    cout << "Noisy Image PSNR: " << calculatePSNR_RGB(img_original, img_noisy) << " dB" << endl << endl;
+    // Step 1: Median Filter (Removes Salt-and-Pepper)
+    cout << "Applying Median Filter..." << endl;
+    applyMedianFilter(noisyImage, medianFilteredImage, WIDTH, HEIGHT);
 
-    // --- STEP 1: Remove Impulse Noise (Median Filter) ---
-    Mat img_step1;
-    // Kernel size 3 is usually sufficient for S&P noise. 5 might be too aggressive.
-    medianBlur(img_noisy, img_step1, 3);
-    
-    double psnr_step1 = calculatePSNR_RGB(img_original, img_step1);
-    cout << "Step 1 (Median Filter 3x3) PSNR: " << psnr_step1 << " dB" << endl;
+    // Step 2: Bilateral Filter (Removes Gaussian Noise + Preserves Edges)
+    // Parameters: sigma_d = 2.0 (Spatial), sigma_r = 30.0 (Intensity/Range)
+    cout << "Applying Bilateral Filter..." << endl;
+    applyBilateralFilter(medianFilteredImage, finalDenoisedImage, WIDTH, HEIGHT, 2.0, 30.0);
 
-    // --- STEP 2: Remove Gaussian Noise (Bilateral Filter) ---
-    Mat img_final;
-    // d: Diameter of pixel neighborhood (9 is common)
-    // sigmaColor: 75 (mixes colors that are somewhat different)
-    // sigmaSpace: 75 (mixes pixels that are spatially close)
-    bilateralFilter(img_step1, img_final, 9, 75, 75);
-    
-    double psnr_final = calculatePSNR_RGB(img_original, img_final);
-    cout << "Step 2 (Bilateral Filter) PSNR:  " << psnr_final << " dB" << endl;
+    cout << "Saving result..." << endl;
+    writeRawImage(outputFileName, finalDenoisedImage);
 
-    // Save results
-    imwrite("flower_step1_median.png", img_step1);
-    imwrite("flower_step2_final.png", img_final);
+    // Calculate Performance
+    double psnrNoisy = calculatePSNR(originalImage, noisyImage);
+    cout << "PSNR (Noisy Image): " << psnrNoisy << " dB" << endl;
 
-    cout << "\nResults saved as 'flower_step1_median.png' and 'flower_step2_final.png'." << endl;
+    double psnrDenoised = calculatePSNR(originalImage, finalDenoisedImage);
+    cout << "PSNR (Denoised Image): " << psnrDenoised << " dB" << endl;
+
+    delete[] originalImage;
+    delete[] noisyImage;
+    delete[] medianFilteredImage;
+    delete[] finalDenoisedImage;
 
     return 0;
 }
