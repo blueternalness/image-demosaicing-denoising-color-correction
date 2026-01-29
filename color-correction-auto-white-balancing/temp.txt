@@ -1,0 +1,1 @@
+g++ -std=c++17 color-correction-auto-white-balancing.cpp -o color-correction-auto-white-balancing
